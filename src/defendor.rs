@@ -57,16 +57,14 @@ impl Defendor {
 
         let unlock_key = Self::derive_key(&password.into(), &salt)?;
 
-        let mut nonce = Defendor::random(12)?;
-
+        let nonce = Defendor::random(12)?;
         let encrypted_key = Defendor::encrypt_data(key.expose_secret(), &unlock_key, &nonce)?;
 
-        nonce.extend_from_slice(&encrypted_key);
-
         let salt_b64 = Base64::encode_string(&salt);
-        let encrypted_key_b64 = Base64::encode_string(&nonce);
+        let nonce_b64 = Base64::encode_string(&nonce);
+        let encrypted_key_b64 = Base64::encode_string(&encrypted_key);
 
-        let vault = Vault::new(salt_b64, encrypted_key_b64);
+        let vault = Vault::new(salt_b64, nonce_b64, encrypted_key_b64);
         let json = to_string(&vault)?;
 
         fs::write(&path, json).await?;
@@ -87,11 +85,9 @@ impl Defendor {
         let vault: Vault = from_str(&json)?;
 
         let salt = Base64::decode_vec(&vault.salt)?;
+        let nonce = Base64::decode_vec(&vault.nonce)?;
         let encrypted_key = Base64::decode_vec(&vault.encrypted_key)?;
         let unlock_key = Self::derive_key(&password.into(), &salt)?;
-
-        let nonce = &encrypted_key[..12];
-        let encrypted_key = &encrypted_key[12..];
 
         let key = Defendor::decrypt_data(&encrypted_key, &unlock_key, &nonce)?;
 
@@ -131,16 +127,14 @@ impl Defendor {
         self.salt = Self::random(SALT_LENGTH)?;
         let unlock_key = Self::derive_key(&password.into(), &self.salt)?;
 
-        let mut nonce = Defendor::random(12)?;
-
+        let nonce = Defendor::random(12)?;
         let encrypted_key = Defendor::encrypt_data(self.key.expose_secret(), &unlock_key, &nonce)?;
 
-        nonce.extend_from_slice(&encrypted_key);
-
         let salt_b64 = Base64::encode_string(&self.salt);
-        let encrypted_key_b64 = Base64::encode_string(&nonce);
+        let nonce_b64 = Base64::encode_string(&nonce);
+        let encrypted_key_b64 = Base64::encode_string(&encrypted_key);
 
-        let vault = Vault::new(salt_b64, encrypted_key_b64);
+        let vault = Vault::new(salt_b64, nonce_b64, encrypted_key_b64);
         let json = to_string(&vault)?;
 
         fs::write(&self.path, json).await?;
@@ -187,6 +181,7 @@ impl Defendor {
 #[derive(Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
 pub struct Vault {
     pub salt: String,
+    pub nonce: String,
     pub encrypted_key: String,
 }
 
@@ -194,15 +189,17 @@ impl Debug for Vault {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Store")
             .field("salt", &"[REDACTED]")
+            .field("nonce", &"[REDACTED]")
             .field("encrypted_key", &"[REDACTED]")
             .finish()
     }
 }
 
 impl Vault {
-    pub fn new(salt: String, encrypted_key: String) -> Self {
+    pub fn new(salt: String, nonce: String, encrypted_key: String) -> Self {
         Vault {
             salt,
+            nonce,
             encrypted_key,
         }
     }
