@@ -2,6 +2,9 @@
 name = "defendor"
 version = "0.0.1"
 edition = "2024"
+description = "A secure file encryption tool with AES-GCM and Argon2 for password hashing."
+license = "Apache-2.0"
+repository = "https://github.com/nashaofu/defendor.git"
 
 [dependencies]
 aes-gcm = { version = "0.10.3", features = ["std", "zeroize"] }

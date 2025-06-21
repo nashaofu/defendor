@@ -13,10 +13,8 @@ async fn main() {
     .await
     .expect("Failed to initialize Defendor");
 
-    let nonce = Defendor::random(12).expect("Failed to generate nonce");
-
     let encrypted = defendor
-        .encrypt(b"Hello, world!", &nonce)
+        .encrypt(b"Hello, world!")
         .expect("Failed to encrypt data");
 
     println!("Encrypted data: {:?}", Base64::encode_string(&encrypted));
@@ -29,7 +27,7 @@ async fn main() {
     println!("Key rotated successfully");
 
     let decrypted = defendor
-        .decrypt(&encrypted, &nonce)
+        .decrypt(&encrypted)
         .expect("Failed to decrypt data after key rotation");
 
     println!(
@@ -45,7 +43,7 @@ async fn main() {
     .expect("Failed to initialize Defendor");
 
     let decrypted = defendor
-        .decrypt(&encrypted, &nonce)
+        .decrypt(&encrypted)
         .expect("Failed to decrypt data after key rotation");
 
     println!(
@@ -53,7 +51,7 @@ async fn main() {
         String::from_utf8(decrypted).expect("Failed to convert to string")
     );
 
-    // fs::remove_file("target/vault")
-    //     .await
-    //     .expect("Failed to remove vault file");
+    fs::remove_file("target/vault")
+        .await
+        .expect("Failed to remove vault file");
 }

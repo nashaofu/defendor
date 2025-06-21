@@ -173,19 +173,19 @@ impl Defendor {
     }
 
     /// 加密数据，仅返回加密后的数据
-    pub fn encrypt(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
+    pub fn encrypt_with_nonce(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
         Self::encrypt_data(data, &self.key, nonce)
     }
     /// 解密数据，仅返回解密后的数据
-    pub fn decrypt(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
+    pub fn decrypt_with_nonce(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
         Self::decrypt_data(data, &self.key, nonce)
     }
 
     /// 加密数据，并自动生成随机 nonce
     /// 返回包含版本、nonce 和加密数据的原始字节
-    pub fn encrypt_bytes(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
+    pub fn encrypt(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
         let nonce = Self::random(NONCE_LENGTH)?;
-        let encrypted = self.encrypt(data, &nonce)?;
+        let encrypted = self.encrypt_with_nonce(data, &nonce)?;
         let data = Data::new(Self::VERSION, nonce, encrypted);
 
         Ok(data.to_bytes())
@@ -193,9 +193,9 @@ impl Defendor {
 
     /// 解密包含版本、nonce 和加密数据的原始字节
     /// 返回解密后的数据
-    pub fn decrypt_bytes(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
+    pub fn decrypt(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
         let data = Data::from_bytes(data)?;
 
-        self.decrypt(&data.encrypted, &data.nonce)
+        self.decrypt_with_nonce(&data.encrypted, &data.nonce)
     }
 }
