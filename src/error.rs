@@ -22,6 +22,9 @@ pub enum DefendorError {
 
     #[error("Invalid key length")]
     InvalidKeyLength,
+
+    #[error("Invalid encrypted data")]
+    InvalidEncryptedData,
 }
 
 pub type DefendorResult<T> = Result<T, DefendorError>;

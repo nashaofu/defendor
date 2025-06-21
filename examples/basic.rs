@@ -8,7 +8,7 @@ async fn main() {
     fs::create_dir_all("target").await.unwrap();
     let mut defendor = Defendor::new(
         "target/vault",
-        Zeroizing::new(String::from("password456").into()),
+        Zeroizing::new(String::from("password123").into()),
     )
     .await
     .expect("Failed to initialize Defendor");
@@ -53,7 +53,7 @@ async fn main() {
         String::from_utf8(decrypted).expect("Failed to convert to string")
     );
 
-    fs::remove_file("target/vault")
-        .await
-        .expect("Failed to remove vault file");
+    // fs::remove_file("target/vault")
+    //     .await
+    //     .expect("Failed to remove vault file");
 }

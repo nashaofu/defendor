@@ -5,17 +5,20 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use base64ct::{Base64, Encoding};
 use getrandom::fill;
 use secrecy::{ExposeSecret, SecretBox};
-use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
 use tokio::fs;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-use crate::{DefendorError, error::DefendorResult};
+use crate::{DefendorError, data::Data, error::DefendorResult, key_store::KeyStore};
 
 // 32 bytes for AES-256
-const KEY_LENGTH: usize = 32;
+pub const KEY_LENGTH: usize = 32;
 // 32 bytes for salt
-const SALT_LENGTH: usize = 32;
+pub const SALT_LENGTH: usize = 32;
+// 12 bytes for nonce
+pub const NONCE_LENGTH: usize = 12;
+// 2 bytes for VERSION
+pub const VERSION_LENGTH: usize = 2;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Defendor {
@@ -34,6 +37,7 @@ impl Debug for Defendor {
 }
 
 impl Defendor {
+    pub const VERSION: u16 = 1;
     pub async fn new<P, Z>(path: P, password: Z) -> DefendorResult<Self>
     where
         P: AsRef<Path>,
@@ -53,20 +57,18 @@ impl Defendor {
         Z: Into<Zeroizing<Vec<u8>>>,
     {
         let salt = Self::random(SALT_LENGTH)?;
-        let key = SecretBox::new(Box::new(Self::random(KEY_LENGTH)?));
-
         let unlock_key = Self::derive_key(&password.into(), &salt)?;
-
         let nonce = Defendor::random(12)?;
+        let key = SecretBox::new(Box::new(Self::random(KEY_LENGTH)?));
         let encrypted_key = Defendor::encrypt_data(key.expose_secret(), &unlock_key, &nonce)?;
 
         let salt_b64 = Base64::encode_string(&salt);
-        let nonce_b64 = Base64::encode_string(&nonce);
-        let encrypted_key_b64 = Base64::encode_string(&encrypted_key);
+        let data = Data::new(Self::VERSION, nonce, encrypted_key);
+        let encrypted_key_b64 = Base64::encode_string(&data.to_bytes());
 
-        let vault = Vault::new(salt_b64, nonce_b64, encrypted_key_b64);
-        let json = to_string(&vault)?;
+        let key_store = KeyStore::new(salt_b64, encrypted_key_b64);
 
+        let json = to_string(&key_store)?;
         fs::write(&path, json).await?;
 
         Ok(Defendor {
@@ -82,14 +84,15 @@ impl Defendor {
         Z: Into<Zeroizing<Vec<u8>>>,
     {
         let json = fs::read_to_string(&path).await?;
-        let vault: Vault = from_str(&json)?;
+        let key_store: KeyStore = from_str(&json)?;
 
-        let salt = Base64::decode_vec(&vault.salt)?;
-        let nonce = Base64::decode_vec(&vault.nonce)?;
-        let encrypted_key = Base64::decode_vec(&vault.encrypted_key)?;
+        let salt = Base64::decode_vec(&key_store.salt)?;
+        let encrypted_key = Base64::decode_vec(&key_store.encrypted_key)?;
+        let data = Data::from_bytes(&encrypted_key)?;
+
         let unlock_key = Self::derive_key(&password.into(), &salt)?;
 
-        let key = Defendor::decrypt_data(&encrypted_key, &unlock_key, &nonce)?;
+        let key = Defendor::decrypt_data(&data.encrypted, &unlock_key, &data.nonce)?;
 
         Ok(Defendor {
             path: path.as_ref().to_string_lossy().into(),
@@ -115,7 +118,7 @@ impl Defendor {
         );
         let mut key = vec![0u8; KEY_LENGTH];
 
-        argon2.hash_password_into(&password, salt, &mut key)?;
+        argon2.hash_password_into(password, salt, &mut key)?;
 
         Ok(SecretBox::new(Box::new(key)))
     }
@@ -131,11 +134,11 @@ impl Defendor {
         let encrypted_key = Defendor::encrypt_data(self.key.expose_secret(), &unlock_key, &nonce)?;
 
         let salt_b64 = Base64::encode_string(&self.salt);
-        let nonce_b64 = Base64::encode_string(&nonce);
-        let encrypted_key_b64 = Base64::encode_string(&encrypted_key);
+        let data = Data::new(Self::VERSION, nonce, encrypted_key);
+        let encrypted_key_b64 = Base64::encode_string(&data.to_bytes());
 
-        let vault = Vault::new(salt_b64, nonce_b64, encrypted_key_b64);
-        let json = to_string(&vault)?;
+        let key_store = KeyStore::new(salt_b64, encrypted_key_b64);
+        let json = to_string(&key_store)?;
 
         fs::write(&self.path, json).await?;
 
@@ -169,38 +172,30 @@ impl Defendor {
         Ok(decrypted)
     }
 
+    /// 加密数据，仅返回加密后的数据
     pub fn encrypt(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
         Self::encrypt_data(data, &self.key, nonce)
     }
-
+    /// 解密数据，仅返回解密后的数据
     pub fn decrypt(&self, data: &[u8], nonce: &[u8]) -> DefendorResult<Vec<u8>> {
         Self::decrypt_data(data, &self.key, nonce)
     }
-}
 
-#[derive(Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
-pub struct Vault {
-    pub salt: String,
-    pub nonce: String,
-    pub encrypted_key: String,
-}
+    /// 加密数据，并自动生成随机 nonce
+    /// 返回包含版本、nonce 和加密数据的原始字节
+    pub fn encrypt_bytes(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
+        let nonce = Self::random(NONCE_LENGTH)?;
+        let encrypted = self.encrypt(data, &nonce)?;
+        let data = Data::new(Self::VERSION, nonce, encrypted);
 
-impl Debug for Vault {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Store")
-            .field("salt", &"[REDACTED]")
-            .field("nonce", &"[REDACTED]")
-            .field("encrypted_key", &"[REDACTED]")
-            .finish()
+        Ok(data.to_bytes())
     }
-}
 
-impl Vault {
-    pub fn new(salt: String, nonce: String, encrypted_key: String) -> Self {
-        Vault {
-            salt,
-            nonce,
-            encrypted_key,
-        }
+    /// 解密包含版本、nonce 和加密数据的原始字节
+    /// 返回解密后的数据
+    pub fn decrypt_bytes(&self, data: &[u8]) -> DefendorResult<Vec<u8>> {
+        let data = Data::from_bytes(data)?;
+
+        self.decrypt(&data.encrypted, &data.nonce)
     }
 }
