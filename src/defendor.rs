@@ -19,6 +19,7 @@ const SALT_LENGTH: usize = 32;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Defendor {
+    path: String,
     salt: Vec<u8>,
     key: SecretBox<Vec<u8>>,
 }
@@ -68,9 +69,13 @@ impl Defendor {
         let vault = Vault::new(salt_b64, encrypted_key_b64);
         let json = to_string(&vault)?;
 
-        fs::write(path, json).await?;
+        fs::write(&path, json).await?;
 
-        Ok(Defendor { salt, key })
+        Ok(Defendor {
+            path: path.as_ref().to_string_lossy().into(),
+            salt,
+            key,
+        })
     }
 
     pub async fn load<P, Z>(path: P, password: Z) -> DefendorResult<Self>
@@ -78,7 +83,7 @@ impl Defendor {
         P: AsRef<Path>,
         Z: Into<Zeroizing<Vec<u8>>>,
     {
-        let json = fs::read_to_string(path).await?;
+        let json = fs::read_to_string(&path).await?;
         let vault: Vault = from_str(&json)?;
 
         let salt = Base64::decode_vec(&vault.salt)?;
@@ -91,6 +96,7 @@ impl Defendor {
         let key = Defendor::decrypt_data(&encrypted_key, &unlock_key, &nonce)?;
 
         Ok(Defendor {
+            path: path.as_ref().to_string_lossy().into(),
             salt,
             key: SecretBox::new(Box::new(key)),
         })
@@ -116,6 +122,30 @@ impl Defendor {
         argon2.hash_password_into(&password, salt, &mut key)?;
 
         Ok(SecretBox::new(Box::new(key)))
+    }
+
+    pub async fn rotate_key<Z>(&mut self, password: Z) -> DefendorResult<()>
+    where
+        Z: Into<Zeroizing<Vec<u8>>>,
+    {
+        self.salt = Self::random(SALT_LENGTH)?;
+        let unlock_key = Self::derive_key(&password.into(), &self.salt)?;
+
+        let mut nonce = Defendor::random(12)?;
+
+        let encrypted_key = Defendor::encrypt_data(self.key.expose_secret(), &unlock_key, &nonce)?;
+
+        nonce.extend_from_slice(&encrypted_key);
+
+        let salt_b64 = Base64::encode_string(&self.salt);
+        let encrypted_key_b64 = Base64::encode_string(&nonce);
+
+        let vault = Vault::new(salt_b64, encrypted_key_b64);
+        let json = to_string(&vault)?;
+
+        fs::write(&self.path, json).await?;
+
+        Ok(())
     }
 
     pub fn encrypt_data(
