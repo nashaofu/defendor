@@ -1,6 +1,6 @@
 [package]
 name = "defendor"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "A secure file encryption tool with AES-GCM and Argon2 for password hashing."
 license = "Apache-2.0"

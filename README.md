@@ -92,7 +92,8 @@ async fn main() {
 - `Defendor::load(path, password)`：加载密钥库
 - `Defendor::encrypt(data)`：加密数据，自动生成 nonce 并封装格式，推荐使用
 - `Defendor::decrypt(data)`：解密数据，自动解析格式，推荐使用
-- `Defendor::rotate_key(new_password)`：轮换密钥（更换解锁密码）
+- `Defendor::change_password(new_password)`：更换解锁密码
+- `Defendor::rotate_key(new_password)`：轮换密钥
 - `Defendor::random(size)`：生成安全随机字节
 
 ## 安全建议

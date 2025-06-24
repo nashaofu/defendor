@@ -38,6 +38,7 @@ impl Debug for Defendor {
 
 impl Defendor {
     pub const VERSION: u16 = 1;
+    /// 初始化或加载密钥库
     pub async fn new<P, Z>(path: P, password: Z) -> DefendorResult<Self>
     where
         P: AsRef<Path>,
@@ -51,6 +52,7 @@ impl Defendor {
         }
     }
 
+    /// 初始化密钥库
     pub async fn init<P, Z>(path: P, password: Z) -> DefendorResult<Self>
     where
         P: AsRef<Path>,
@@ -70,7 +72,6 @@ impl Defendor {
 
         let json = to_string(&key_store)?;
         fs::write(&path, json).await?;
-
         Ok(Defendor {
             path: path.as_ref().to_string_lossy().into(),
             salt,
@@ -78,6 +79,7 @@ impl Defendor {
         })
     }
 
+    /// 加载密钥库
     pub async fn load<P, Z>(path: P, password: Z) -> DefendorResult<Self>
     where
         P: AsRef<Path>,
@@ -101,12 +103,14 @@ impl Defendor {
         })
     }
 
+    /// 生成安全随机字节
     pub fn random(size: usize) -> DefendorResult<Vec<u8>> {
         let mut buffer = vec![0u8; size];
         fill(&mut buffer)?;
         Ok(buffer)
     }
 
+    /// 密码和盐派生密钥，使用更高安全参数
     pub fn derive_key(
         password: &Zeroizing<Vec<u8>>,
         salt: &[u8],
@@ -114,13 +118,35 @@ impl Defendor {
         let argon2 = Argon2::new(
             Algorithm::Argon2id,
             Version::V0x13,
-            Params::new(64 * 1024, 4, 2, None)?,
+            Params::new(128 * 1024, 4, 4, None)?, // 128MB, 4线程, 4次迭代
         );
         let mut key = vec![0u8; KEY_LENGTH];
 
         argon2.hash_password_into(password, salt, &mut key)?;
 
         Ok(SecretBox::new(Box::new(key)))
+    }
+
+    pub async fn change_password<Z>(&mut self, password: Z) -> DefendorResult<()>
+    where
+        Z: Into<Zeroizing<Vec<u8>>>,
+    {
+        self.salt = Self::random(SALT_LENGTH)?;
+        let unlock_key = Self::derive_key(&password.into(), &self.salt)?;
+
+        let nonce = Defendor::random(12)?;
+        let encrypted_key = Defendor::encrypt_data(self.key.expose_secret(), &unlock_key, &nonce)?;
+
+        let salt_b64 = Base64::encode_string(&self.salt);
+        let data = Data::new(Self::VERSION, nonce, encrypted_key);
+        let encrypted_key_b64 = Base64::encode_string(&data.to_bytes());
+
+        let key_store = KeyStore::new(salt_b64, encrypted_key_b64);
+        let json = to_string(&key_store)?;
+
+        fs::write(&self.path, json).await?;
+
+        Ok(())
     }
 
     pub async fn rotate_key<Z>(&mut self, password: Z) -> DefendorResult<()>
@@ -131,7 +157,10 @@ impl Defendor {
         let unlock_key = Self::derive_key(&password.into(), &self.salt)?;
 
         let nonce = Defendor::random(12)?;
-        let encrypted_key = Defendor::encrypt_data(self.key.expose_secret(), &unlock_key, &nonce)?;
+        let key = SecretBox::new(Box::new(Self::random(KEY_LENGTH)?));
+        let encrypted_key = Defendor::encrypt_data(key.expose_secret(), &unlock_key, &nonce)?;
+
+        self.key = key;
 
         let salt_b64 = Base64::encode_string(&self.salt);
         let data = Data::new(Self::VERSION, nonce, encrypted_key);
