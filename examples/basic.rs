@@ -19,8 +19,20 @@ async fn main() {
 
     println!("Encrypted data: {:?}", Base64::encode_string(&encrypted));
 
+    change_password(&mut defendor, &encrypted).await;
+
+    let mut defendor = re_init(&encrypted).await;
+
+    rotate_key(&mut defendor, b"Hello, world!").await;
+
+    fs::remove_file("target/vault")
+        .await
+        .expect("Failed to remove vault file");
+}
+
+async fn change_password(defendor: &mut Defendor, encrypted: &[u8]) {
     defendor
-        .rotate_key("password456".as_bytes().to_vec())
+        .change_password("password456".as_bytes().to_vec())
         .await
         .expect("Failed to rotate key");
 
@@ -28,13 +40,15 @@ async fn main() {
 
     let decrypted = defendor
         .decrypt(&encrypted)
-        .expect("Failed to decrypt data after key rotation");
+        .expect("Failed to decrypt data after change password");
 
     println!(
-        "Decrypted data after key rotation: {:?}",
+        "Decrypted data after change password: {:?}",
         String::from_utf8(decrypted).expect("Failed to convert to string")
     );
+}
 
+async fn re_init(encrypted: &[u8]) -> Defendor {
     let defendor = Defendor::new(
         "target/vault",
         Zeroizing::new(String::from("password456").into()),
@@ -51,7 +65,28 @@ async fn main() {
         String::from_utf8(decrypted).expect("Failed to convert to string")
     );
 
-    fs::remove_file("target/vault")
+    defendor
+}
+
+async fn rotate_key(defendor: &mut Defendor, data: &[u8]) {
+    defendor
+        .rotate_key("password456".as_bytes().to_vec())
         .await
-        .expect("Failed to remove vault file");
+        .unwrap();
+
+    let encrypt = defendor
+        .encrypt(data)
+        .expect("Failed to re-encrypt data after key rotation");
+
+    println!(
+        "Re-encrypted data after key rotation: {:?}",
+        Base64::encode_string(&encrypt)
+    );
+
+    let decrypted = defendor.decrypt(&encrypt).unwrap();
+
+    println!(
+        "Decrypted data after key rotation: {:?}",
+        String::from_utf8(decrypted).expect("Failed to convert to string")
+    );
 }
