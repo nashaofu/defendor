@@ -44,7 +44,7 @@ impl Defendor {
         P: AsRef<Path>,
         Z: Into<Zeroizing<Vec<u8>>>,
     {
-        let is_exists = fs::try_exists(path.as_ref()).await?;
+        let is_exists = path.as_ref().exists();
         if is_exists {
             Self::load(path, password).await
         } else {
@@ -58,6 +58,11 @@ impl Defendor {
         P: AsRef<Path>,
         Z: Into<Zeroizing<Vec<u8>>>,
     {
+        let path = path.as_ref();
+        if path.exists() {
+            return Err(DefendorError::VaultFileExists);
+        }
+
         let salt = Self::random(SALT_LENGTH)?;
         let unlock_key = Self::derive_key(&password.into(), &salt)?;
         let nonce = Defendor::random(12)?;
@@ -73,7 +78,7 @@ impl Defendor {
         let json = to_string(&key_store)?;
         fs::write(&path, json).await?;
         Ok(Defendor {
-            path: path.as_ref().to_string_lossy().into(),
+            path: path.to_string_lossy().into(),
             salt,
             key,
         })

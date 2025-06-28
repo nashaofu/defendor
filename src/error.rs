@@ -20,6 +20,9 @@ pub enum DefendorError {
     #[error(transparent)]
     Base64ctError(#[from] base64ct::Error),
 
+    #[error("Vault file already exists")]
+    VaultFileExists,
+
     #[error("Invalid key length")]
     InvalidKeyLength,
 
