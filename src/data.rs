@@ -1,7 +1,7 @@
-use crate::{
-    DefendorError, DefendorResult,
-    defendor::{NONCE_LENGTH, VERSION_LENGTH},
-};
+use crate::{error::DefendorError, error::DefendorResult, NONCE_LENGTH};
+
+// 2 bytes for VERSION
+pub const VERSION_LENGTH: usize = 2;
 
 pub struct Data {
     pub version: u16,

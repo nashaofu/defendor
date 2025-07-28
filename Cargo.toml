@@ -1,22 +1,33 @@
 [package]
 name = "defendor"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 description = "A secure file encryption tool with AES-GCM and Argon2 for password hashing."
 license = "Apache-2.0"
 repository = "https://github.com/nashaofu/defendor.git"
 
+[features]
+default = []
+biometric = []
+
 [dependencies]
 aes-gcm = { version = "0.10.3", features = ["std", "zeroize"] }
 argon2 = { version = "0.5.3", features = ["std", "zeroize"] }
 base64ct = "1.8.0"
-tokio = { version = "1.45.1", features = ["fs"] }
-serde_json = "1.0.140"
+tokio = { version = "1.47.1", features = ["fs"] }
+serde_json = "1.0.143"
 getrandom = { version = "0.3.3", features = ["std"] }
 zeroize = { version = "1.8.1", features = ["derive"] }
 secrecy = "0.10.3"
-thiserror = "2.0.12"
-serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.16"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = [
+  "Security_Credentials",
+  "Security_Cryptography",
+  "Storage_Streams",
+] }
+sha2 = "0.10.9"
 
 [dev-dependencies]
-tokio = { version = "1.45.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.47.1", features = ["full"] }
