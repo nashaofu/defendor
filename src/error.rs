@@ -20,6 +20,7 @@ pub enum DefendorError {
     #[error(transparent)]
     Base64ctError(#[from] base64ct::Error),
 
+    #[cfg(target_os = "windows")]
     #[error(transparent)]
     WindowsCoreError(#[from] windows::core::Error),
 
