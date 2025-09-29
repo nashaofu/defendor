@@ -1,6 +1,6 @@
 [package]
 name = "defendor"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2024"
 description = "A secure file encryption tool with AES-GCM and Argon2 for password hashing."
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ biometric = []
 [dependencies]
 aes-gcm = { version = "0.10.3", features = ["std", "zeroize"] }
 argon2 = { version = "0.5.3", features = ["std", "zeroize"] }
-base64ct = "1.8.0"
+base64ct = "~1.6"
 tokio = { version = "1.47.1", features = ["fs"] }
 serde_json = "1.0.143"
 getrandom = { version = "0.3.3", features = ["std"] }
